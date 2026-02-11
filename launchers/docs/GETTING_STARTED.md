@@ -27,14 +27,79 @@
 
 ## 1. Environment Preparation
 
-We provide two environment options:
+We provide three environment options:
 
 | Option | Status | Notes |
 |--------|--------|-------|
-| **Container-based** (Docker + Apptainer) | Implemented | Recommended |
+| **<span style="color:red">[Karish]</span> Pyxis/Enroot** (Slurm clusters) | Implemented | Recommended for HPC clusters |
+| **Container-based** (Docker + Apptainer) | Implemented | For local dev or Apptainer clusters |
 | **Conda / UV** (native environment) | Placeholder | Not yet implemented |
 
-### 1.1 Container-Based Setup (Recommended)
+### <span style="color:red">[Karish]</span> 1.1 Pyxis/Enroot Setup (Recommended for Slurm Clusters)
+
+Most GPU clusters (e.g., those with H100/H200 nodes) use **Pyxis** + **Enroot** as their container runtime. This is NVIDIA's container solution for Slurm — it pulls Docker/NGC images directly via `srun` flags, with no need to install Docker or Apptainer.
+
+```
+NGC Registry (nvcr.io/nvidia/pytorch:25.04-py3)
+    |  srun --container-image=...
+    v
+Running container on compute node(s)
+```
+
+**How to check if your cluster uses Pyxis:**
+
+```bash
+srun --help 2>&1 | grep container-image
+# If you see "--container-image", Pyxis is available
+```
+
+#### Step 1 — Create Saved Container (One-Time)
+
+This pulls the NGC base image and installs additional Python packages (`transformers`, `wandb`, `tensorboard`), saving the result as a named container for fast reuse:
+
+```bash
+# Option A: Within an existing salloc
+salloc --account=mrs_2 --qos=h200_mrs_2_high --time=0:30:00 \
+       --nodes=1 --ntasks-per-node=1 --gpus-per-node=1 \
+       --cpus-per-task=10 --mem=0
+bash launchers/setup/setup_pyxis_container.sh
+
+# Option B: Submit as a batch job
+sbatch launchers/setup/setup_pyxis_container.sh
+```
+
+#### Step 2 — Set Container Name
+
+After setup, tell training scripts to use the saved container:
+
+```bash
+export CONTAINER_NAME="lorentz-moe"
+```
+
+Or uncomment the `CONTAINER_NAME` line in any `*_pyxis.sh` training config.
+
+> **Note:** If you skip Step 1, training scripts will still work — they'll pull the NGC base image on-the-fly via `--container-image`. This is slower on the first run (image download) but requires no setup. However, the extra pip packages (`transformers`, `wandb`) will not be available unless you create the saved container.
+
+#### <span style="color:red">[Karish]</span> Cluster-Specific Workarounds
+
+The Pyxis scripts include fixes for common HPC cluster issues:
+
+| Issue | Fix | Details |
+|-------|-----|---------|
+| Enroot whiteout errors (`Operation not permitted`) | `TMPDIR=/dev/shm` | Clusters whose `/tmp` is an overlay filesystem can't create overlayfs whiteouts. Using RAM-backed `/dev/shm` resolves this. |
+| Slurm `task_prolog.sh` fails inside container | Mount no-op prolog | The cluster's prolog script depends on host-specific tools. A no-op script at `/fsx/karish/enroot/noop_prolog.sh` is mounted over it. |
+| NGC image URI format | `nvcr.io#nvidia/pytorch:25.04-py3` | Enroot uses `#` (not `/`) to separate registry from image path. Using `/` would route to Docker Hub instead of NGC. |
+
+#### Verify Installation
+
+```bash
+srun --ntasks=1 --container-name=lorentz-moe \
+    python -c "import torch; print(torch.cuda.is_available())"
+```
+
+### 1.2 Container-Based Setup (Docker + Apptainer) *(original)*
+
+For clusters with Apptainer (Singularity) or for local development with Docker.
 
 The container workflow uses **Docker** for local development and **Apptainer** for multi-node Slurm clusters.
 
@@ -96,7 +161,7 @@ apptainer exec --nv ~/images/lorentz-moe_25.04.sif \
     python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-### 1.2 Conda/UV Setup (Placeholder)
+### 1.3 Conda/UV Setup (Placeholder)
 
 Not yet implemented.
 
@@ -165,10 +230,19 @@ Before training, raw text data must be converted into Megatron's binary format (
 | `preprocess_redpajama.sh` | All 10 sources | Production training |
 | `preprocess_redpajama_small.sh` | Wikipedia + StackExchange | Development / testing |
 | `preprocess_redpajama_tiny.sh` | 10k samples from Wikipedia | Quick debugging |
+| **<span style="color:red">[Karish]</span>** `prepare_tiny_pyxis.sh` | 10k Wikipedia (auto-downloads) | Pyxis clusters, end-to-end |
 
 #### Usage
 
-**Quick test (tiny):**
+**<span style="color:red">[Karish]</span> Quick test with Pyxis (tiny, recommended for Slurm clusters):**
+
+```bash
+# Downloads RedPajama Wikipedia + preprocesses inside container (one command)
+# Requires: salloc with at least 1 GPU
+bash launchers/data_processing/prepare_tiny_pyxis.sh
+```
+
+**Quick test (tiny, Docker/Apptainer):**
 
 ```bash
 cd launchers/data_processing
@@ -300,6 +374,7 @@ source "${SCRIPT_DIR}/../base/_train_moe_base_docker.sh"
 
 | Backend | Use Case | Base Scripts |
 |---------|----------|-------------|
+| **<span style="color:red">[Karish]</span> Pyxis/Enroot** | Slurm clusters (recommended) | `_train_moe_base_pyxis.sh`, `_train_dense_base_pyxis.sh` |
 | Docker | Single-node testing | `_train_dense_base_docker.sh`, `_train_moe_base_docker.sh` |
 | Apptainer | Single-node (cluster) | `_train_moe_base_apptainer.sh` |
 | Slurm + Apptainer | Multi-node distributed | `_train_moe_base_slurm.sh` |
@@ -320,31 +395,36 @@ launchers/training/
 │
 ├── lorentz/                              # ── Hyperbolic models ──
 │   ├── base/
+│   │   ├── _train_moe_base_pyxis.sh         # <span style="color:red">[Karish]</span> Pyxis/Enroot (recommended)
+│   │   ├── _train_dense_base_pyxis.sh       # <span style="color:red">[Karish]</span> Pyxis/Enroot (dense)
 │   │   ├── _train_dense_base_docker.sh
 │   │   ├── _train_moe_base_docker.sh
 │   │   ├── _train_moe_base_apptainer.sh
 │   │   └── _train_moe_base_slurm.sh
 │   ├── single-node/
+│   │   ├── train_moe_80m_redpajama-small_pyxis.sh   # <span style="color:red">[Karish]</span> Pyxis
 │   │   ├── train_4b_redpajama-small.sh
-│   │   ├── train_moe_80M_te_redpajama-small.sh
-│   │   └── train_moe_80M_te_redpajama-small_apptainer.sh
+│   │   └── train_moe_80m_redpajama-small.sh
 │   └── multi-node/
+│       ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # <span style="color:red">[Karish]</span> Pyxis
 │       ├── train_8b_redpajama-small_2node.sh
-│       ├── train_moe_80M_te_redpajama-small_2node.sh
+│       ├── train_moe_80m_redpajama-small_2node.sh
 │       └── train_moe_30b-a3b_redpajama-small_2node.sh
 │
 └── standard/                             # ── Euclidean baselines ──
     ├── base/
+    │   ├── _train_moe_base_pyxis.sh          # <span style="color:red">[Karish]</span> Pyxis/Enroot
     │   ├── _train_moe_base_docker.sh
     │   ├── _train_moe_base_apptainer.sh
     │   └── _train_moe_base_slurm.sh
     ├── single-node/
+    │   ├── train_moe_80m_redpajama-small_pyxis.sh    # <span style="color:red">[Karish]</span> Pyxis
     │   ├── train_4b_redpajama-small.sh
-    │   ├── train_moe_80M_te_redpajama-small.sh
-    │   └── train_moe_80M_sequential_redpajama-small.sh
+    │   └── train_moe_80m_redpajama-small.sh
     └── multi-node/
+        ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # <span style="color:red">[Karish]</span> Pyxis
         ├── train_8b_redpajama-small_2node.sh
-        ├── train_moe_80M_te_redpajama-small_2node.sh
+        ├── train_moe_80m_redpajama-small_2node.sh
         ├── train_moe_30b-a3b_redpajama-small_2node.sh
         └── train_mixtral_8x7b_redpajama-small_2node.sh
 ```
@@ -382,20 +462,37 @@ Every Lorentz model has a matching Standard baseline for controlled comparison. 
 
 All Lorentz scripts use `pretrain_lorentz_gpt.py` as the entry point.
 
-#### Single-Node
+#### <span style="color:red">[Karish]</span> Single-Node (Pyxis — Recommended)
+
+```bash
+# First, get an interactive allocation:
+salloc --account=mrs_2 --qos=h200_mrs_2_high --time=1:00:00 \
+       --nodes=1 --ntasks-per-node=1 --gpus-per-node=8 \
+       --cpus-per-task=80 --mem=0
+
+# MoE 80M (TEGroupedMLP) — Pyxis
+export CONTAINER_NAME="lorentz-moe"  # if setup was run
+bash launchers/training/lorentz/single-node/train_moe_80m_redpajama-small_pyxis.sh
+```
+
+#### Single-Node (Docker/Apptainer) *(original)*
 
 ```bash
 # Dense 4B — Apptainer, TP=8 across 8 GPUs
 ./launchers/training/lorentz/single-node/train_4b_redpajama-small.sh
 
 # MoE 80M (TEGroupedMLP) — Docker
-./launchers/training/lorentz/single-node/train_moe_80M_te_redpajama-small.sh
-
-# MoE 80M (TEGroupedMLP) — Apptainer
-./launchers/training/lorentz/single-node/train_moe_80M_te_redpajama-small_apptainer.sh
+./launchers/training/lorentz/single-node/train_moe_80m_redpajama-small.sh
 ```
 
-#### Multi-Node (Slurm)
+#### <span style="color:red">[Karish]</span> Multi-Node (Pyxis — Recommended)
+
+```bash
+# MoE 80M — 2 nodes, TP=2, EP=2
+sbatch launchers/training/lorentz/multi-node/train_moe_80m_redpajama-small_2node_pyxis.sh
+```
+
+#### Multi-Node (Slurm + Apptainer) *(original)*
 
 Submit with `sbatch`:
 
@@ -404,7 +501,7 @@ Submit with `sbatch`:
 sbatch launchers/training/lorentz/multi-node/train_8b_redpajama-small_2node.sh
 
 # MoE 80M — 2 nodes, TP=2, EP=2, sequence parallel
-sbatch launchers/training/lorentz/multi-node/train_moe_80M_te_redpajama-small_2node.sh
+sbatch launchers/training/lorentz/multi-node/train_moe_80m_redpajama-small_2node.sh
 
 # MoE 30B-A3B — 2 nodes, 128 experts, TP=2, EP=8 (production-scale)
 sbatch launchers/training/lorentz/multi-node/train_moe_30b-a3b_redpajama-small_2node.sh
@@ -432,27 +529,44 @@ MoE expert types for Lorentz:
 
 Standard scripts mirror the Lorentz scripts exactly (same architecture, same hyperparameters) but without hyperbolic geometry. They use `pretrain_gpt.py` as the entry point.
 
-#### Single-Node
+#### <span style="color:red">[Karish]</span> Single-Node (Pyxis — Recommended)
+
+```bash
+# First, get an interactive allocation:
+salloc --account=mrs_2 --qos=h200_mrs_2_high --time=1:00:00 \
+       --nodes=1 --ntasks-per-node=1 --gpus-per-node=8 \
+       --cpus-per-task=80 --mem=0
+
+# MoE 80M (TEGroupedMLP) — Pyxis
+export CONTAINER_NAME="lorentz-moe"  # if setup was run
+bash launchers/training/standard/single-node/train_moe_80m_redpajama-small_pyxis.sh
+```
+
+#### Single-Node (Docker/Apptainer) *(original)*
 
 ```bash
 # Dense 4B — Apptainer, TP=8
 ./launchers/training/standard/single-node/train_4b_redpajama-small.sh
 
 # MoE 80M (TEGroupedMLP) — Docker
-./launchers/training/standard/single-node/train_moe_80M_te_redpajama-small.sh
-
-# MoE 80M (SequentialMLP, no TE dependency) — Docker
-./launchers/training/standard/single-node/train_moe_80M_sequential_redpajama-small.sh
+./launchers/training/standard/single-node/train_moe_80m_redpajama-small.sh
 ```
 
-#### Multi-Node (Slurm)
+#### <span style="color:red">[Karish]</span> Multi-Node (Pyxis — Recommended)
+
+```bash
+# MoE 80M — 2 nodes, TP=2, EP=2
+sbatch launchers/training/standard/multi-node/train_moe_80m_redpajama-small_2node_pyxis.sh
+```
+
+#### Multi-Node (Slurm + Apptainer) *(original)*
 
 ```bash
 # Dense 8B — 2 nodes
 sbatch launchers/training/standard/multi-node/train_8b_redpajama-small_2node.sh
 
 # MoE 80M — 2 nodes
-sbatch launchers/training/standard/multi-node/train_moe_80M_te_redpajama-small_2node.sh
+sbatch launchers/training/standard/multi-node/train_moe_80m_redpajama-small_2node.sh
 
 # MoE 30B-A3B — 2 nodes, 128 experts
 sbatch launchers/training/standard/multi-node/train_moe_30b-a3b_redpajama-small_2node.sh
@@ -503,6 +617,8 @@ sbatch launchers/training/standard/multi-node/train_mixtral_8x7b_redpajama-small
 | `APPTAINER_IMAGE` | Apptainer `.sif` path (default: `~/images/lorentz-moe_25.04.sif`) |
 | `HOST_DATA_DIR` | Host path to preprocessed data |
 | `DATA_PATH` | Container-internal data path |
+| **<span style="color:red">[Karish]</span>** `CONTAINER_IMAGE` | NGC image URI for Pyxis (default: `nvcr.io#nvidia/pytorch:25.04-py3`) |
+| **<span style="color:red">[Karish]</span>** `CONTAINER_NAME` | Saved enroot container name (overrides `CONTAINER_IMAGE`) |
 
 ### 3.6 Outputs
 
