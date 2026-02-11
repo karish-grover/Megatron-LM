@@ -31,11 +31,11 @@ We provide three environment options:
 
 | Option | Status | Notes |
 |--------|--------|-------|
-| **<span style="color:red">[Karish]</span> Pyxis/Enroot** (Slurm clusters) | Implemented | Recommended for HPC clusters |
+| **${\color{red}\textsf{[Karish]}}$ Pyxis/Enroot** (Slurm clusters) | Implemented | Recommended for HPC clusters |
 | **Container-based** (Docker + Apptainer) | Implemented | For local dev or Apptainer clusters |
 | **Conda / UV** (native environment) | Placeholder | Not yet implemented |
 
-### <span style="color:red">[Karish]</span> 1.1 Pyxis/Enroot Setup (Recommended for Slurm Clusters)
+### ${\color{red}\textsf{[Karish]}}$ 1.1 Pyxis/Enroot Setup (Recommended for Slurm Clusters)
 
 Most GPU clusters (e.g., those with H100/H200 nodes) use **Pyxis** + **Enroot** as their container runtime. This is NVIDIA's container solution for Slurm — it pulls Docker/NGC images directly via `srun` flags, with no need to install Docker or Apptainer.
 
@@ -80,7 +80,7 @@ Or uncomment the `CONTAINER_NAME` line in any `*_pyxis.sh` training config.
 
 > **Note:** If you skip Step 1, training scripts will still work — they'll pull the NGC base image on-the-fly via `--container-image`. This is slower on the first run (image download) but requires no setup. However, the extra pip packages (`transformers`, `wandb`) will not be available unless you create the saved container.
 
-#### <span style="color:red">[Karish]</span> Cluster-Specific Workarounds
+#### ${\color{red}\textsf{[Karish]}}$ Cluster-Specific Workarounds
 
 The Pyxis scripts include fixes for common HPC cluster issues:
 
@@ -230,11 +230,11 @@ Before training, raw text data must be converted into Megatron's binary format (
 | `preprocess_redpajama.sh` | All 10 sources | Production training |
 | `preprocess_redpajama_small.sh` | Wikipedia + StackExchange | Development / testing |
 | `preprocess_redpajama_tiny.sh` | 10k samples from Wikipedia | Quick debugging |
-| **<span style="color:red">[Karish]</span>** `prepare_tiny_pyxis.sh` | 10k Wikipedia (auto-downloads) | Pyxis clusters, end-to-end |
+| **${\color{red}\textsf{[Karish]}}$** `prepare_tiny_pyxis.sh` | 10k Wikipedia (auto-downloads) | Pyxis clusters, end-to-end |
 
 #### Usage
 
-**<span style="color:red">[Karish]</span> Quick test with Pyxis (tiny, recommended for Slurm clusters):**
+**${\color{red}\textsf{[Karish]}}$ Quick test with Pyxis (tiny, recommended for Slurm clusters):**
 
 ```bash
 # Downloads RedPajama Wikipedia + preprocesses inside container (one command)
@@ -374,7 +374,7 @@ source "${SCRIPT_DIR}/../base/_train_moe_base_docker.sh"
 
 | Backend | Use Case | Base Scripts |
 |---------|----------|-------------|
-| **<span style="color:red">[Karish]</span> Pyxis/Enroot** | Slurm clusters (recommended) | `_train_moe_base_pyxis.sh`, `_train_dense_base_pyxis.sh` |
+| **${\color{red}\textsf{[Karish]}}$ Pyxis/Enroot** | Slurm clusters (recommended) | `_train_moe_base_pyxis.sh`, `_train_dense_base_pyxis.sh` |
 | Docker | Single-node testing | `_train_dense_base_docker.sh`, `_train_moe_base_docker.sh` |
 | Apptainer | Single-node (cluster) | `_train_moe_base_apptainer.sh` |
 | Slurm + Apptainer | Multi-node distributed | `_train_moe_base_slurm.sh` |
@@ -395,34 +395,34 @@ launchers/training/
 │
 ├── lorentz/                              # ── Hyperbolic models ──
 │   ├── base/
-│   │   ├── _train_moe_base_pyxis.sh         # <span style="color:red">[Karish]</span> Pyxis/Enroot (recommended)
-│   │   ├── _train_dense_base_pyxis.sh       # <span style="color:red">[Karish]</span> Pyxis/Enroot (dense)
+│   │   ├── _train_moe_base_pyxis.sh         # ${\color{red}\textsf{[Karish]}}$ Pyxis/Enroot (recommended)
+│   │   ├── _train_dense_base_pyxis.sh       # ${\color{red}\textsf{[Karish]}}$ Pyxis/Enroot (dense)
 │   │   ├── _train_dense_base_docker.sh
 │   │   ├── _train_moe_base_docker.sh
 │   │   ├── _train_moe_base_apptainer.sh
 │   │   └── _train_moe_base_slurm.sh
 │   ├── single-node/
-│   │   ├── train_moe_80m_redpajama-small_pyxis.sh   # <span style="color:red">[Karish]</span> Pyxis
+│   │   ├── train_moe_80m_redpajama-small_pyxis.sh   # ${\color{red}\textsf{[Karish]}}$ Pyxis
 │   │   ├── train_4b_redpajama-small.sh
 │   │   └── train_moe_80m_redpajama-small.sh
 │   └── multi-node/
-│       ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # <span style="color:red">[Karish]</span> Pyxis
+│       ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # ${\color{red}\textsf{[Karish]}}$ Pyxis
 │       ├── train_8b_redpajama-small_2node.sh
 │       ├── train_moe_80m_redpajama-small_2node.sh
 │       └── train_moe_30b-a3b_redpajama-small_2node.sh
 │
 └── standard/                             # ── Euclidean baselines ──
     ├── base/
-    │   ├── _train_moe_base_pyxis.sh          # <span style="color:red">[Karish]</span> Pyxis/Enroot
+    │   ├── _train_moe_base_pyxis.sh          # ${\color{red}\textsf{[Karish]}}$ Pyxis/Enroot
     │   ├── _train_moe_base_docker.sh
     │   ├── _train_moe_base_apptainer.sh
     │   └── _train_moe_base_slurm.sh
     ├── single-node/
-    │   ├── train_moe_80m_redpajama-small_pyxis.sh    # <span style="color:red">[Karish]</span> Pyxis
+    │   ├── train_moe_80m_redpajama-small_pyxis.sh    # ${\color{red}\textsf{[Karish]}}$ Pyxis
     │   ├── train_4b_redpajama-small.sh
     │   └── train_moe_80m_redpajama-small.sh
     └── multi-node/
-        ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # <span style="color:red">[Karish]</span> Pyxis
+        ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # ${\color{red}\textsf{[Karish]}}$ Pyxis
         ├── train_8b_redpajama-small_2node.sh
         ├── train_moe_80m_redpajama-small_2node.sh
         ├── train_moe_30b-a3b_redpajama-small_2node.sh
@@ -462,7 +462,7 @@ Every Lorentz model has a matching Standard baseline for controlled comparison. 
 
 All Lorentz scripts use `pretrain_lorentz_gpt.py` as the entry point.
 
-#### <span style="color:red">[Karish]</span> Single-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ Single-Node (Pyxis — Recommended)
 
 ```bash
 # First, get an interactive allocation:
@@ -485,7 +485,7 @@ bash launchers/training/lorentz/single-node/train_moe_80m_redpajama-small_pyxis.
 ./launchers/training/lorentz/single-node/train_moe_80m_redpajama-small.sh
 ```
 
-#### <span style="color:red">[Karish]</span> Multi-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ Multi-Node (Pyxis — Recommended)
 
 ```bash
 # MoE 80M — 2 nodes, TP=2, EP=2
@@ -529,7 +529,7 @@ MoE expert types for Lorentz:
 
 Standard scripts mirror the Lorentz scripts exactly (same architecture, same hyperparameters) but without hyperbolic geometry. They use `pretrain_gpt.py` as the entry point.
 
-#### <span style="color:red">[Karish]</span> Single-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ Single-Node (Pyxis — Recommended)
 
 ```bash
 # First, get an interactive allocation:
@@ -552,7 +552,7 @@ bash launchers/training/standard/single-node/train_moe_80m_redpajama-small_pyxis
 ./launchers/training/standard/single-node/train_moe_80m_redpajama-small.sh
 ```
 
-#### <span style="color:red">[Karish]</span> Multi-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ Multi-Node (Pyxis — Recommended)
 
 ```bash
 # MoE 80M — 2 nodes, TP=2, EP=2
@@ -617,8 +617,8 @@ sbatch launchers/training/standard/multi-node/train_mixtral_8x7b_redpajama-small
 | `APPTAINER_IMAGE` | Apptainer `.sif` path (default: `~/images/lorentz-moe_25.04.sif`) |
 | `HOST_DATA_DIR` | Host path to preprocessed data |
 | `DATA_PATH` | Container-internal data path |
-| **<span style="color:red">[Karish]</span>** `CONTAINER_IMAGE` | NGC image URI for Pyxis (default: `nvcr.io#nvidia/pytorch:25.04-py3`) |
-| **<span style="color:red">[Karish]</span>** `CONTAINER_NAME` | Saved enroot container name (overrides `CONTAINER_IMAGE`) |
+| **${\color{red}\textsf{[Karish]}}$** `CONTAINER_IMAGE` | NGC image URI for Pyxis (default: `nvcr.io#nvidia/pytorch:25.04-py3`) |
+| **${\color{red}\textsf{[Karish]}}$** `CONTAINER_NAME` | Saved enroot container name (overrides `CONTAINER_IMAGE`) |
 
 ### 3.6 Outputs
 
