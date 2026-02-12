@@ -231,8 +231,23 @@ Before training, raw text data must be converted into Megatron's binary format (
 | `preprocess_redpajama_small.sh` | Wikipedia + StackExchange | Development / testing |
 | `preprocess_redpajama_tiny.sh` | 10k samples from Wikipedia | Quick debugging |
 | **${\color{red}\textsf{[Karish]}}$** `prepare_tiny_pyxis.sh` | 10k Wikipedia (auto-downloads) | Pyxis clusters, end-to-end |
+| **${\color{red}\textsf{[Karish]}}$** `download_redpajama.sh` | Downloads all 10 sources (~4.4 TB) | Full dataset download |
+| **${\color{red}\textsf{[Karish]}}$** `prepare_redpajama_pyxis.sh` | All 10 sources (LLaMA 3.1 tokenizer) | Full production processing (Pyxis) |
 
 #### Usage
+
+**${\color{red}\textsf{[Karish]}}$ Full production data pipeline (Pyxis):**
+
+```bash
+# Step 1: Download full RedPajama (~4.4 TB, runs on login node)
+nohup bash launchers/data_processing/download_redpajama.sh &
+
+# Step 2: Process all 10 sources (requires salloc with GPU + 64 CPUs)
+salloc --account=mrs_2 --qos=h200_mrs_2_high --time=24:00:00 \
+       --nodes=1 --ntasks-per-node=1 --gpus-per-node=1 \
+       --cpus-per-task=64 --mem=0
+bash launchers/data_processing/prepare_redpajama_pyxis.sh
+```
 
 **${\color{red}\textsf{[Karish]}}$ Quick test with Pyxis (tiny, recommended for Slurm clusters):**
 
@@ -402,11 +417,13 @@ launchers/training/
 │   │   ├── _train_moe_base_apptainer.sh
 │   │   └── _train_moe_base_slurm.sh
 │   ├── single-node/
-│   │   ├── train_moe_80m_redpajama-small_pyxis.sh   # ${\color{red}\textsf{[Karish]}}$ Pyxis
+│   │   ├── train_moe_1b_redpajama_pyxis.sh          # [Karish] 1B HELM-MiCE
+│   │   ├── train_moe_80m_redpajama-small_pyxis.sh   # [Karish] 80M Pyxis
 │   │   ├── train_4b_redpajama-small.sh
 │   │   └── train_moe_80m_redpajama-small.sh
 │   └── multi-node/
-│       ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # ${\color{red}\textsf{[Karish]}}$ Pyxis
+│       ├── train_moe_1b_redpajama_16node_pyxis.sh    # [Karish] 1B 16-node
+│       ├── train_moe_80m_redpajama-small_2node_pyxis.sh  # [Karish] 80M Pyxis
 │       ├── train_8b_redpajama-small_2node.sh
 │       ├── train_moe_80m_redpajama-small_2node.sh
 │       └── train_moe_30b-a3b_redpajama-small_2node.sh
@@ -448,6 +465,7 @@ Every Lorentz model has a matching Standard baseline for controlled comparison. 
 
 | Model | Layers | Hidden | Experts (routed+shared) | Top-K | Parallelism | Nodes | Backend |
 |-------|--------|--------|------------------------|-------|-------------|-------|---------|
+| ${\color{red}\textsf{[Karish]}}$ **1B HELM-MiCE** | **16** | **910** | **8 + 1 shared** | **2** | **TP=2, EP=8** | **16** | **Pyxis** |
 | 80M MoE Lorentz (TE) | 4 | 256 | 4 + 1 shared | 2 | DP | 1 | Docker / Apptainer |
 | 80M MoE Standard (TE) | 4 | 256 | 4 | 2 | DP | 1 | Docker |
 | 80M MoE Standard (Seq) | 4 | 256 | 4 | 2 | DP | 1 | Docker |
@@ -462,16 +480,25 @@ Every Lorentz model has a matching Standard baseline for controlled comparison. 
 
 All Lorentz scripts use `pretrain_lorentz_gpt.py` as the entry point.
 
-#### ${\color{red}\textsf{[Karish]}}$ Single-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ 1B HELM-MiCE (Pyxis — Production)
 
 ```bash
-# First, get an interactive allocation:
+# Single-node test (8 GPUs):
+salloc --account=mrs_2 --qos=h200_mrs_2_high --time=4:00:00 \
+       --nodes=1 --ntasks-per-node=1 --gpus-per-node=8 \
+       --cpus-per-task=80 --mem=0
+bash launchers/training/lorentz/single-node/train_moe_1b_redpajama_pyxis.sh
+
+# Full production (16 nodes, 128 GPUs):
+sbatch launchers/training/lorentz/multi-node/train_moe_1b_redpajama_16node_pyxis.sh
+```
+
+#### ${\color{red}\textsf{[Karish]}}$ 80M MoE (Pyxis — Quick Test)
+
+```bash
 salloc --account=mrs_2 --qos=h200_mrs_2_high --time=1:00:00 \
        --nodes=1 --ntasks-per-node=1 --gpus-per-node=8 \
        --cpus-per-task=80 --mem=0
-
-# MoE 80M (TEGroupedMLP) — Pyxis
-export CONTAINER_NAME="lorentz-moe"  # if setup was run
 bash launchers/training/lorentz/single-node/train_moe_80m_redpajama-small_pyxis.sh
 ```
 
@@ -485,10 +512,13 @@ bash launchers/training/lorentz/single-node/train_moe_80m_redpajama-small_pyxis.
 ./launchers/training/lorentz/single-node/train_moe_80m_redpajama-small.sh
 ```
 
-#### ${\color{red}\textsf{[Karish]}}$ Multi-Node (Pyxis — Recommended)
+#### ${\color{red}\textsf{[Karish]}}$ Multi-Node (Pyxis)
 
 ```bash
-# MoE 80M — 2 nodes, TP=2, EP=2
+# 1B HELM-MiCE — 16 nodes, 128 GPUs (production)
+sbatch launchers/training/lorentz/multi-node/train_moe_1b_redpajama_16node_pyxis.sh
+
+# MoE 80M — 2 nodes, TP=2, EP=2 (testing)
 sbatch launchers/training/lorentz/multi-node/train_moe_80m_redpajama-small_2node_pyxis.sh
 ```
 

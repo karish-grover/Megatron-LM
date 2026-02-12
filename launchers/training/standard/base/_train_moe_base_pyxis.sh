@@ -136,7 +136,17 @@ TRAINING_ARGS=(
 )
 
 # Add data path if provided, otherwise use mock data
-if [ -n "$DATA_PATH" ]; then
+# DATA_BLEND_PATH: container-internal path to blend file (multi-source training)
+# DATA_PATH: container-internal path to single dataset prefix
+if [ -n "$DATA_BLEND_PATH" ]; then
+    DATA_CACHE_DIR="${MEGATRON_DIR}/data_cache/${MODEL_NAME}"
+    mkdir -p "$DATA_CACHE_DIR"
+    TRAINING_ARGS+=(
+        --data-args-path "$DATA_BLEND_PATH"
+        --split "949,50,1"
+        --data-cache-path "$DATA_CACHE_DIR"
+    )
+elif [ -n "$DATA_PATH" ]; then
     DATA_CACHE_DIR="${MEGATRON_DIR}/data_cache/${MODEL_NAME}"
     mkdir -p "$DATA_CACHE_DIR"
     TRAINING_ARGS+=(
